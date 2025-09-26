@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+from typing import Dict
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -14,7 +15,15 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import BOT_TOKEN, ADMIN_USER_ID
 from database import Database
+from database_enhancements import DatabaseEnhancements
 from yoga_data import YogaDataManager
+from ui_enhancements import (
+    get_quick_actions_keyboard, 
+    get_workout_plans_keyboard,
+    get_achievements_keyboard,
+    format_progress_message,
+    get_motivational_message
+)
 
 # Настройка логирования
 logging.basicConfig(
@@ -30,6 +39,7 @@ dp = Dispatcher(storage=storage)
 
 # Инициализация базы данных
 db = Database()
+db_enhanced = DatabaseEnhancements()
 yoga_manager = YogaDataManager(db)
 
 # Состояния для FSM
@@ -40,52 +50,62 @@ class UserStates(StatesGroup):
 
 # Клавиатуры
 def get_main_keyboard():
-    """Главная клавиатура"""
+    """Главная клавиатура с улучшенным дизайном"""
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🧘 Поза дня"), KeyboardButton(text="📚 Каталог поз")],
-            [KeyboardButton(text="📊 Мой прогресс"), KeyboardButton(text="⚙️ Настройки")],
-            [KeyboardButton(text="ℹ️ Помощь"), KeyboardButton(text="🎯 Рекомендации")]
+            [KeyboardButton(text="🧘‍♀️ Поза дня"), KeyboardButton(text="📚 Каталог поз")],
+            [KeyboardButton(text="🔍 Поиск поз"), KeyboardButton(text="🎯 Рекомендации")],
+            [KeyboardButton(text="📊 Мой прогресс"), KeyboardButton(text="⏱️ Таймер")],
+            [KeyboardButton(text="⚙️ Настройки"), KeyboardButton(text="ℹ️ Помощь")]
         ],
         resize_keyboard=True,
-        input_field_placeholder="Выберите действие..."
+        input_field_placeholder="🧘‍♀️ Выберите действие...",
+        one_time_keyboard=False
     )
     return keyboard
 
 def get_categories_keyboard():
-    """Клавиатура категорий поз"""
+    """Улучшенная клавиатура категорий поз"""
     categories = yoga_manager.get_categories()
     keyboard = InlineKeyboardBuilder()
     
-    # Добавляем кнопки по 2 в ряд
-    for i in range(0, len(categories), 2):
+    # Категории с эмодзи и лучшей организацией
+    category_data = [
+        ("standing", "🏃‍♀️ Стоячие"),
+        ("seated", "🧘‍♂️ Сидячие"),
+        ("on_knees", "🦵 На коленях"),
+        ("lying", "🛌 Лежачие"),
+        ("inversion", "🤸‍♀️ Перевернутые"),
+        ("backbend", "🏹 Прогибы"),
+        ("forward_bend", "🙇‍♀️ Наклоны вперед"),
+        ("twist", "🌀 Скручивания"),
+        ("resting", "😌 Расслабляющие"),
+        ("balance", "⚖️ Равновесие")
+    ]
+    
+    # Добавляем кнопки по 2 в ряд с улучшенным дизайном
+    for i in range(0, len(category_data), 2):
         row = []
         for j in range(2):
-            if i + j < len(categories):
-                category = categories[i + j]
-                category_names = {
-                    "standing": "Стоячие",
-                    "seated": "Сидячие", 
-                    "on_knees": "На коленях",
-                    "lying": "Лежачие",
-                    "inversion": "Перевернутые",
-                    "backbend": "Прогибы",
-                    "forward_bend": "Наклоны вперед",
-                    "twist": "Скручивания",
-                    "resting": "Расслабляющие",
-                    "balance": "Равновесие"
-                }
+            if i + j < len(category_data):
+                category, display_name = category_data[i + j]
                 row.append(InlineKeyboardButton(
-                    text=category_names.get(category, category),
+                    text=display_name,
                     callback_data=f"category_{category}"
                 ))
         keyboard.row(*row)
     
-    keyboard.row(InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main"))
+    # Навигационные кнопки
+    keyboard.row(
+        InlineKeyboardButton(text="🔍 Поиск", callback_data="search_poses"),
+        InlineKeyboardButton(text="🎲 Случайная", callback_data="random_pose")
+    )
+    keyboard.row(InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_main"))
+    
     return keyboard.as_markup()
 
 def get_difficulty_keyboard():
-    """Клавиатура уровней сложности"""
+    """Улучшенная клавиатура уровней сложности"""
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -93,15 +113,17 @@ def get_difficulty_keyboard():
                 InlineKeyboardButton(text="🟡 Средний", callback_data="difficulty_intermediate")
             ],
             [
-                InlineKeyboardButton(text="🔴 Продвинутый", callback_data="difficulty_advanced"),
-                InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")
+                InlineKeyboardButton(text="🔴 Продвинутый", callback_data="difficulty_advanced")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Назад в настройки", callback_data="back_to_settings")
             ]
         ]
     )
     return keyboard
 
 def get_pose_keyboard(pose_id: int):
-    """Клавиатура для работы с позой"""
+    """Улучшенная клавиатура для работы с позой"""
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -109,8 +131,71 @@ def get_pose_keyboard(pose_id: int):
                 InlineKeyboardButton(text="📝 Заметки", callback_data=f"notes_{pose_id}")
             ],
             [
+                InlineKeyboardButton(text="⏱️ Таймер", callback_data=f"timer_{pose_id}"),
+                InlineKeyboardButton(text="❤️ В избранное", callback_data=f"favorite_{pose_id}")
+            ],
+            [
                 InlineKeyboardButton(text="🔄 Другая поза", callback_data="random_pose"),
-                InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")
+                InlineKeyboardButton(text="📚 Каталог", callback_data="catalog")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_main")
+            ]
+        ]
+    )
+    return keyboard
+
+def get_search_keyboard():
+    """Клавиатура для поиска поз"""
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔤 По названию", callback_data="search_by_name"),
+                InlineKeyboardButton(text="📂 По категории", callback_data="search_by_category")
+            ],
+            [
+                InlineKeyboardButton(text="⭐ По сложности", callback_data="search_by_difficulty"),
+                InlineKeyboardButton(text="🎲 Случайная", callback_data="random_pose")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_main")
+            ]
+        ]
+    )
+    return keyboard
+
+def get_timer_keyboard(pose_id: int):
+    """Клавиатура для таймера"""
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⏱️ 30 сек", callback_data=f"timer_{pose_id}_30"),
+                InlineKeyboardButton(text="⏱️ 1 мин", callback_data=f"timer_{pose_id}_60")
+            ],
+            [
+                InlineKeyboardButton(text="⏱️ 2 мин", callback_data=f"timer_{pose_id}_120"),
+                InlineKeyboardButton(text="⏱️ 5 мин", callback_data=f"timer_{pose_id}_300")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 К позе", callback_data=f"pose_{pose_id}")
+            ]
+        ]
+    )
+    return keyboard
+
+def get_rating_keyboard(pose_id: int):
+    """Клавиатура для оценки позы"""
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⭐", callback_data=f"rating_{pose_id}_1"),
+                InlineKeyboardButton(text="⭐⭐", callback_data=f"rating_{pose_id}_2"),
+                InlineKeyboardButton(text="⭐⭐⭐", callback_data=f"rating_{pose_id}_3"),
+                InlineKeyboardButton(text="⭐⭐⭐⭐", callback_data=f"rating_{pose_id}_4"),
+                InlineKeyboardButton(text="⭐⭐⭐⭐⭐", callback_data=f"rating_{pose_id}_5")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 К позе", callback_data=f"pose_{pose_id}")
             ]
         ]
     )
@@ -133,13 +218,16 @@ async def cmd_start(message: types.Message):
     welcome_text = f"""
 🧘‍♀️ *Добро пожаловать в Yoga Learning Bot!*
 
-Привет, {user.first_name}! 
+Привет, {user.first_name}! 👋
 
 Этот бот поможет вам изучить йогу с помощью:
 • 📚 Каталога поз с подробными описаниями
 • 🎯 Персональных рекомендаций
 • 📊 Отслеживания прогресса
-• 🧘 Позы дня для ежедневной практики
+• 🧘‍♀️ Позы дня для ежедневной практики
+• 🔍 Удобного поиска поз
+• ⏱️ Таймера для практики
+• ❤️ Избранных поз
 
 Выберите действие в меню ниже или используйте команды:
 /help - помощь
@@ -159,6 +247,7 @@ async def cmd_help(message: types.Message):
     help_text = """
 📖 *Справка по командам:*
 
+🔧 *Основные команды:*
 /start - начать работу с ботом
 /help - показать эту справку
 /settings - настройки профиля
@@ -167,19 +256,34 @@ async def cmd_help(message: types.Message):
 /daily - поза дня
 
 🎯 *Основные функции:*
-• 🧘 Поза дня - ежедневная рекомендация
+• 🧘‍♀️ Поза дня - ежедневная рекомендация
 • 📚 Каталог поз - поиск по категориям и сложности
+• 🔍 Поиск поз - удобный поиск по названию
 • 📊 Мой прогресс - статистика занятий
+• ⏱️ Таймер - отслеживание времени практики
 • ⚙️ Настройки - уровень сложности и предпочтения
 • 🎯 Рекомендации - персональные советы
+• ❤️ Избранные позы - сохранение любимых поз
 
 💡 *Советы:*
 • Начните с поз для начинающих
 • Регулярно практикуйтесь для лучших результатов
 • Оценивайте позы для улучшения рекомендаций
+• Используйте таймер для структурированной практики
+• Сохраняйте понравившиеся позы в избранное
+
+🌟 *Новые возможности:*
+• Улучшенная навигация
+• Мотивационные сообщения
+• Система достижений
+• Планы тренировок
 """
     
-    await message.answer(help_text, parse_mode="Markdown")
+    await message.answer(
+        help_text, 
+        reply_markup=get_quick_actions_keyboard(),
+        parse_mode="Markdown"
+    )
 
 @dp.message(Command("settings"))
 async def cmd_settings(message: types.Message):
@@ -215,24 +319,32 @@ async def cmd_progress(message: types.Message):
     progress = await db.get_user_progress(user_id)
     
     if progress:
-        progress_text = f"""
-📊 *Ваш прогресс*
-
-🎯 Всего сессий: {progress.get('total_sessions', 0)}
-⏱️ Общее время: {progress.get('total_duration', 0) // 60} минут
-🔥 Текущая серия: {progress.get('current_streak', 0)} дней
-🏆 Лучшая серия: {progress.get('longest_streak', 0)} дней
-📅 Последняя сессия: {progress.get('last_session_date', 'Никогда')}
-"""
+        progress_text = format_progress_message(progress)
+        
+        # Добавляем мотивационное сообщение
+        motivation = get_motivational_message()
+        progress_text += f"\n💫 *Мотивация:*\n{motivation}"
+        
+        await message.answer(
+            progress_text,
+            reply_markup=get_achievements_keyboard(),
+            parse_mode="Markdown"
+        )
     else:
         progress_text = """
 📊 *Ваш прогресс*
 
 Пока у вас нет записанных сессий.
 Начните практику, чтобы отслеживать свой прогресс!
+
+💡 *Совет:* Попробуйте позу дня или выберите позу из каталога!
 """
-    
-    await message.answer(progress_text, parse_mode="Markdown")
+        
+        await message.answer(
+            progress_text,
+            reply_markup=get_quick_actions_keyboard(),
+            parse_mode="Markdown"
+        )
 
 @dp.message(Command("pose"))
 async def cmd_random_pose(message: types.Message):
@@ -290,6 +402,29 @@ async def help_handler(message: types.Message):
     """Обработчик кнопки 'Помощь'"""
     await cmd_help(message)
 
+@dp.message(F.text == "🔍 Поиск поз")
+async def search_poses_handler(message: types.Message):
+    """Обработчик кнопки 'Поиск поз'"""
+    await message.answer(
+        "🔍 *Поиск поз йоги*\n\nВыберите способ поиска:",
+        reply_markup=get_search_keyboard(),
+        parse_mode="Markdown"
+    )
+
+@dp.message(F.text == "⏱️ Таймер")
+async def timer_handler(message: types.Message):
+    """Обработчик кнопки 'Таймер'"""
+    await message.answer(
+        "⏱️ *Таймер для практики*\n\nСначала выберите позу из каталога, затем используйте таймер для отслеживания времени практики.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="📚 Каталог поз", callback_data="catalog")],
+                [InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_main")]
+            ]
+        ),
+        parse_mode="Markdown"
+    )
+
 @dp.message(F.text == "🎯 Рекомендации")
 async def recommendations_handler(message: types.Message):
     """Обработчик кнопки 'Рекомендации'"""
@@ -301,7 +436,13 @@ async def recommendations_handler(message: types.Message):
         if poses:
             # Берем первые 3 позы как рекомендации
             recommended_poses = poses[:3]
-            recommendations_text = f"🎯 *Рекомендации для уровня '{level}'*\n\n"
+            level_names = {
+                "beginner": "🟢 Начинающий",
+                "intermediate": "🟡 Средний",
+                "advanced": "🔴 Продвинутый"
+            }
+            
+            recommendations_text = f"🎯 *Рекомендации для уровня {level_names.get(level, level)}*\n\n"
             
             for i, pose in enumerate(recommended_poses, 1):
                 recommendations_text += f"{i}. *{pose['name']}*\n"
@@ -381,9 +522,152 @@ async def back_to_main_callback(callback: types.CallbackQuery):
     """Обработчик возврата в главное меню"""
     await callback.message.edit_text(
         "🏠 *Главное меню*\n\nВыберите действие:",
-        reply_markup=get_main_keyboard(),
         parse_mode="Markdown"
     )
+    await callback.message.answer(
+        "🧘‍♀️ Выберите действие:",
+        reply_markup=get_main_keyboard()
+    )
+
+@dp.callback_query(F.data == "catalog")
+async def catalog_callback(callback: types.CallbackQuery):
+    """Обработчик возврата к каталогу"""
+    await callback.message.edit_text(
+        "📚 *Каталог поз йоги*\n\nВыберите категорию:",
+        reply_markup=get_categories_keyboard(),
+        parse_mode="Markdown"
+    )
+
+@dp.callback_query(F.data == "search_poses")
+async def search_poses_callback(callback: types.CallbackQuery):
+    """Обработчик поиска поз"""
+    await callback.message.edit_text(
+        "🔍 *Поиск поз йоги*\n\nВыберите способ поиска:",
+        reply_markup=get_search_keyboard(),
+        parse_mode="Markdown"
+    )
+
+@dp.callback_query(F.data.startswith("search_by_"))
+async def search_by_callback(callback: types.CallbackQuery):
+    """Обработчик различных типов поиска"""
+    search_type = callback.data.split("_", 2)[2]
+    
+    if search_type == "name":
+        await callback.message.edit_text(
+            "🔤 *Поиск по названию*\n\nВведите название позы (например: 'гора', 'дерево', 'кошка'):",
+            parse_mode="Markdown"
+        )
+        # Здесь можно добавить состояние для ожидания ввода
+    elif search_type == "category":
+        await callback.message.edit_text(
+            "📂 *Поиск по категории*\n\nВыберите категорию:",
+            reply_markup=get_categories_keyboard(),
+            parse_mode="Markdown"
+        )
+    elif search_type == "difficulty":
+        await callback.message.edit_text(
+            "⭐ *Поиск по сложности*\n\nВыберите уровень:",
+            reply_markup=get_difficulty_keyboard(),
+            parse_mode="Markdown"
+        )
+
+@dp.callback_query(F.data.startswith("timer_"))
+async def timer_callback(callback: types.CallbackQuery):
+    """Обработчик таймера"""
+    parts = callback.data.split("_")
+    if len(parts) == 2:
+        # Показать клавиатуру выбора времени
+        pose_id = int(parts[1])
+        await callback.message.edit_text(
+            "⏱️ *Выберите время для практики:*",
+            reply_markup=get_timer_keyboard(pose_id),
+            parse_mode="Markdown"
+        )
+    elif len(parts) == 3:
+        # Запустить таймер
+        pose_id = int(parts[1])
+        duration = int(parts[2])
+        await start_timer(callback, pose_id, duration)
+
+@dp.callback_query(F.data.startswith("favorite_"))
+async def favorite_callback(callback: types.CallbackQuery):
+    """Обработчик добавления в избранное"""
+    pose_id = int(callback.data.split("_", 1)[1])
+    user_id = callback.from_user.id
+    
+    # Проверяем, является ли поза уже избранной
+    is_favorite = await db_enhanced.is_favorite(user_id, pose_id)
+    
+    if is_favorite:
+        # Удаляем из избранного
+        success = await db_enhanced.remove_from_favorites(user_id, pose_id)
+        if success:
+            await callback.answer("🤍 Поза удалена из избранного!")
+        else:
+            await callback.answer("❌ Ошибка при удалении из избранного")
+    else:
+        # Добавляем в избранное
+        success = await db_enhanced.add_to_favorites(user_id, pose_id)
+        if success:
+            await callback.answer("❤️ Поза добавлена в избранное!")
+        else:
+            await callback.answer("❌ Ошибка при добавлении в избранное")
+
+@dp.callback_query(F.data == "back_to_settings")
+async def back_to_settings_callback(callback: types.CallbackQuery):
+    """Обработчик возврата к настройкам"""
+    await cmd_settings(callback.message)
+
+@dp.callback_query(F.data == "daily_pose")
+async def daily_pose_callback(callback: types.CallbackQuery):
+    """Обработчик позы дня через callback"""
+    pose = await yoga_manager.get_daily_pose(callback.from_user.id)
+    if pose:
+        daily_text = "🌟 *Поза дня*\n\n" + yoga_manager.format_pose_info(pose)
+        await callback.message.edit_text(
+            daily_text,
+            reply_markup=get_pose_keyboard(pose['id']),
+            parse_mode="Markdown"
+        )
+    else:
+        await callback.answer("❌ Не удалось получить позу дня. Попробуйте позже.")
+
+@dp.callback_query(F.data == "progress")
+async def progress_callback(callback: types.CallbackQuery):
+    """Обработчик прогресса через callback"""
+    user_id = callback.from_user.id
+    progress = await db.get_user_progress(user_id)
+    
+    if progress:
+        progress_text = format_progress_message(progress)
+        motivation = get_motivational_message()
+        progress_text += f"\n💫 *Мотивация:*\n{motivation}"
+        
+        await callback.message.edit_text(
+            progress_text,
+            reply_markup=get_achievements_keyboard(),
+            parse_mode="Markdown"
+        )
+    else:
+        progress_text = """
+📊 *Ваш прогресс*
+
+Пока у вас нет записанных сессий.
+Начните практику, чтобы отслеживать свой прогресс!
+
+💡 *Совет:* Попробуйте позу дня или выберите позу из каталога!
+"""
+        
+        await callback.message.edit_text(
+            progress_text,
+            reply_markup=get_quick_actions_keyboard(),
+            parse_mode="Markdown"
+        )
+
+@dp.callback_query(F.data == "settings")
+async def settings_callback(callback: types.CallbackQuery):
+    """Обработчик настроек через callback"""
+    await cmd_settings(callback.message)
 
 @dp.callback_query(F.data == "random_pose")
 async def random_pose_callback(callback: types.CallbackQuery):
@@ -402,23 +686,9 @@ async def rate_pose_callback(callback: types.CallbackQuery):
     """Обработчик оценки позы"""
     pose_id = int(callback.data.split("_", 1)[1])
     
-    # Создаем клавиатуру с оценками
-    rating_keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⭐", callback_data=f"rating_{pose_id}_1"),
-                InlineKeyboardButton(text="⭐⭐", callback_data=f"rating_{pose_id}_2"),
-                InlineKeyboardButton(text="⭐⭐⭐", callback_data=f"rating_{pose_id}_3"),
-                InlineKeyboardButton(text="⭐⭐⭐⭐", callback_data=f"rating_{pose_id}_4"),
-                InlineKeyboardButton(text="⭐⭐⭐⭐⭐", callback_data=f"rating_{pose_id}_5")
-            ],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data=f"pose_{pose_id}")]
-        ]
-    )
-    
     await callback.message.edit_text(
         "⭐ *Оцените эту позу:*\n\nКак вам понравилась поза?",
-        reply_markup=rating_keyboard,
+        reply_markup=get_rating_keyboard(pose_id),
         parse_mode="Markdown"
     )
 
@@ -444,10 +714,106 @@ async def rating_submit_callback(callback: types.CallbackQuery):
     if pose:
         await show_pose_info_callback(callback, pose)
 
+@dp.callback_query(F.data.startswith("start_timer_"))
+async def start_timer_callback(callback: types.CallbackQuery):
+    """Обработчик запуска таймера"""
+    parts = callback.data.split("_")
+    pose_id = int(parts[2])
+    duration = int(parts[3])
+    
+    await callback.answer("⏱️ Таймер запущен!")
+    
+    # Запускаем обратный отсчет
+    await countdown_timer(callback, pose_id, duration)
+
 # Вспомогательные функции
+async def start_timer(callback: types.CallbackQuery, pose_id: int, duration: int):
+    """Запуск таймера для позы"""
+    pose = await db.get_yoga_pose_by_id(pose_id)
+    if not pose:
+        await callback.answer("❌ Поза не найдена!")
+        return
+    
+    # Отправляем сообщение с таймером
+    timer_message = await callback.message.edit_text(
+        f"⏱️ *Таймер запущен*\n\n"
+        f"🧘‍♀️ *{pose['name']}*\n"
+        f"⏰ Время: {duration} секунд\n\n"
+        f"Готовы начать? Нажмите кнопку ниже!",
+        parse_mode="Markdown"
+    )
+    
+    # Создаем клавиатуру для управления таймером
+    timer_control_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="▶️ Начать", callback_data=f"start_timer_{pose_id}_{duration}")],
+            [InlineKeyboardButton(text="⏹️ Отмена", callback_data=f"pose_{pose_id}")]
+        ]
+    )
+    
+    await callback.message.answer(
+        "⏱️ *Управление таймером*",
+        reply_markup=timer_control_keyboard,
+        parse_mode="Markdown"
+    )
+
+async def countdown_timer(callback: types.CallbackQuery, pose_id: int, duration: int):
+    """Обратный отсчет таймера"""
+    pose = await db.get_yoga_pose_by_id(pose_id)
+    if not pose:
+        return
+    
+    # Обновляем сообщение с обратным отсчетом
+    for remaining in range(duration, 0, -1):
+        minutes = remaining // 60
+        seconds = remaining % 60
+        time_str = f"{minutes:02d}:{seconds:02d}"
+        
+        await callback.message.edit_text(
+            f"⏱️ *Практика в процессе*\n\n"
+            f"🧘‍♀️ *{pose['name']}*\n"
+            f"⏰ Осталось: {time_str}\n\n"
+            f"💪 Продолжайте практику!",
+            parse_mode="Markdown"
+        )
+        
+        # Ждем 1 секунду
+        await asyncio.sleep(1)
+    
+    # Завершение таймера
+    await callback.message.edit_text(
+        f"🎉 *Время истекло!*\n\n"
+        f"🧘‍♀️ *{pose['name']}*\n"
+        f"✅ Отличная работа!\n\n"
+        f"💪 Вы завершили практику!",
+        parse_mode="Markdown"
+    )
+    
+    # Сохраняем сессию
+    await db.add_user_session(
+        user_id=callback.from_user.id,
+        pose_id=pose_id,
+        duration_seconds=duration,
+        rating=None
+    )
+    
+    # Проверяем достижения
+    await db_enhanced.check_achievements(callback.from_user.id)
+    
+    # Показываем кнопки для продолжения
+    await callback.message.answer(
+        "🎯 *Что дальше?*",
+        reply_markup=get_pose_keyboard(pose_id),
+        parse_mode="Markdown"
+    )
+
 async def show_pose_info(message: types.Message, pose: Dict):
     """Показать информацию о позе"""
     pose_text = yoga_manager.format_pose_info(pose)
+    
+    # Проверяем, является ли поза избранной
+    is_favorite = await db_enhanced.is_favorite(message.from_user.id, pose['id'])
+    
     await message.answer(
         pose_text,
         reply_markup=get_pose_keyboard(pose['id']),
@@ -457,6 +823,10 @@ async def show_pose_info(message: types.Message, pose: Dict):
 async def show_pose_info_callback(callback: types.CallbackQuery, pose: Dict):
     """Показать информацию о позе через callback"""
     pose_text = yoga_manager.format_pose_info(pose)
+    
+    # Проверяем, является ли поза избранной
+    is_favorite = await db_enhanced.is_favorite(callback.from_user.id, pose['id'])
+    
     await callback.message.edit_text(
         pose_text,
         reply_markup=get_pose_keyboard(pose['id']),
@@ -476,6 +846,7 @@ async def main():
     """Основная функция запуска бота"""
     # Инициализация базы данных
     await db.init_db()
+    await db_enhanced.init_enhanced_tables()
     await yoga_manager.initialize_basic_poses()
     
     logger.info("Бот запущен!")
