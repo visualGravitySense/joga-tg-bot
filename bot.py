@@ -207,6 +207,20 @@ async def cmd_start(message: types.Message):
     """Обработчик команды /start"""
     user = message.from_user
     
+    # В группах показываем краткое приветствие
+    if message.chat.type in ['group', 'supergroup']:
+        await message.answer(
+            f"🧘‍♀️ *Yoga Learning Bot*\n\n"
+            f"Привет, {user.first_name}! 👋\n\n"
+            f"Этот бот поможет вам изучить йогу.\n"
+            f"Для полной функциональности напишите боту в личные сообщения.\n\n"
+            f"💡 *Команды:*\n"
+            f"/start - информация о боте\n"
+            f"/help - справка (в личных сообщениях)",
+            parse_mode="Markdown"
+        )
+        return
+    
     # Добавляем пользователя в базу данных
     await db.add_user(
         user_id=user.id,
@@ -244,6 +258,20 @@ async def cmd_start(message: types.Message):
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
     """Обработчик команды /help"""
+    # В группах показываем краткую справку
+    if message.chat.type in ['group', 'supergroup']:
+        await message.answer(
+            "📖 *Справка по боту*\n\n"
+            "🧘‍♀️ *Yoga Learning Bot* - бот для изучения йоги\n\n"
+            "💡 *Основные команды:*\n"
+            "/start - информация о боте\n"
+            "/help - эта справка\n\n"
+            "🔒 *Для полной функциональности:*\n"
+            "Напишите боту в личные сообщения\n"
+            "Там доступны все функции: каталог, прогресс, таймер и др.",
+            parse_mode="Markdown"
+        )
+        return
     help_text = """
 📖 *Справка по командам:*
 
@@ -288,6 +316,9 @@ async def cmd_help(message: types.Message):
 @dp.message(Command("settings"))
 async def cmd_settings(message: types.Message):
     """Обработчик команды /settings"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     user = await db.get_user(message.from_user.id)
     if user:
         level_text = {
@@ -315,6 +346,9 @@ async def cmd_settings(message: types.Message):
 @dp.message(Command("progress"))
 async def cmd_progress(message: types.Message):
     """Обработчик команды /progress"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     user_id = message.from_user.id
     progress = await db.get_user_progress(user_id)
     
@@ -349,6 +383,9 @@ async def cmd_progress(message: types.Message):
 @dp.message(Command("pose"))
 async def cmd_random_pose(message: types.Message):
     """Обработчик команды /pose - случайная поза"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     user = await db.get_user(message.from_user.id)
     difficulty = user.get('level', 'beginner') if user else 'beginner'
     
@@ -361,6 +398,9 @@ async def cmd_random_pose(message: types.Message):
 @dp.message(Command("daily"))
 async def cmd_daily_pose(message: types.Message):
     """Обработчик команды /daily - поза дня"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     pose = await yoga_manager.get_daily_pose(message.from_user.id)
     if pose:
         daily_text = "🌟 *Поза дня*\n\n" + yoga_manager.format_pose_info(pose)
@@ -373,14 +413,20 @@ async def cmd_daily_pose(message: types.Message):
         await message.answer("❌ Не удалось получить позу дня. Попробуйте позже.")
 
 # Обработчики кнопок
-@dp.message(F.text == "🧘 Поза дня")
+@dp.message(F.text == "🧘‍♀️ Поза дня")
 async def daily_pose_handler(message: types.Message):
     """Обработчик кнопки 'Поза дня'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     await cmd_daily_pose(message)
 
 @dp.message(F.text == "📚 Каталог поз")
 async def catalog_handler(message: types.Message):
     """Обработчик кнопки 'Каталог поз'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     await message.answer(
         "📚 *Каталог поз йоги*\n\nВыберите категорию:",
         reply_markup=get_categories_keyboard(),
@@ -390,21 +436,33 @@ async def catalog_handler(message: types.Message):
 @dp.message(F.text == "📊 Мой прогресс")
 async def progress_handler(message: types.Message):
     """Обработчик кнопки 'Мой прогресс'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     await cmd_progress(message)
 
 @dp.message(F.text == "⚙️ Настройки")
 async def settings_handler(message: types.Message):
     """Обработчик кнопки 'Настройки'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     await cmd_settings(message)
 
 @dp.message(F.text == "ℹ️ Помощь")
 async def help_handler(message: types.Message):
     """Обработчик кнопки 'Помощь'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     await cmd_help(message)
 
 @dp.message(F.text == "🔍 Поиск поз")
 async def search_poses_handler(message: types.Message):
     """Обработчик кнопки 'Поиск поз'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     await message.answer(
         "🔍 *Поиск поз йоги*\n\nВыберите способ поиска:",
         reply_markup=get_search_keyboard(),
@@ -414,6 +472,9 @@ async def search_poses_handler(message: types.Message):
 @dp.message(F.text == "⏱️ Таймер")
 async def timer_handler(message: types.Message):
     """Обработчик кнопки 'Таймер'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     await message.answer(
         "⏱️ *Таймер для практики*\n\nСначала выберите позу из каталога, затем используйте таймер для отслеживания времени практики.",
         reply_markup=InlineKeyboardMarkup(
@@ -428,6 +489,9 @@ async def timer_handler(message: types.Message):
 @dp.message(F.text == "🎯 Рекомендации")
 async def recommendations_handler(message: types.Message):
     """Обработчик кнопки 'Рекомендации'"""
+    # Работает только в личных сообщениях
+    if message.chat.type != 'private':
+        return
     user = await db.get_user(message.from_user.id)
     if user:
         level = user.get('level', 'beginner')
@@ -449,7 +513,26 @@ async def recommendations_handler(message: types.Message):
                 if pose.get('description'):
                     recommendations_text += f"   {pose['description'][:100]}...\n\n"
             
-            await message.answer(recommendations_text, parse_mode="Markdown")
+            # Создаем клавиатуру с кнопками для каждой позы
+            keyboard = InlineKeyboardBuilder()
+            for pose in recommended_poses:
+                keyboard.row(
+                    InlineKeyboardButton(
+                        text=f"🧘‍♀️ {pose['name']}",
+                        callback_data=f"pose_{pose['id']}"
+                    )
+                )
+            
+            # Добавляем кнопку возврата
+            keyboard.row(
+                InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_main")
+            )
+            
+            await message.answer(
+                recommendations_text, 
+                reply_markup=keyboard.as_markup(),
+                parse_mode="Markdown"
+            )
         else:
             await message.answer("❌ Нет доступных рекомендаций для вашего уровня.")
     else:
@@ -613,6 +696,105 @@ async def favorite_callback(callback: types.CallbackQuery):
         else:
             await callback.answer("❌ Ошибка при добавлении в избранное")
 
+@dp.callback_query(F.data.startswith("notes_"))
+async def notes_callback(callback: types.CallbackQuery):
+    """Обработчик заметок к позе"""
+    pose_id = int(callback.data.split("_", 1)[1])
+    user_id = callback.from_user.id
+    
+    # Получаем существующие заметки
+    notes = await db_enhanced.get_user_notes(user_id, pose_id)
+    
+    if notes:
+        # Показываем существующие заметки
+        notes_text = "📝 *Ваши заметки к этой позе:*\n\n"
+        for note in notes:
+            notes_text += f"• {note['note_text']}\n"
+            notes_text += f"  📅 {note['updated_at']}\n\n"
+        
+        notes_text += "💡 *Что хотите сделать?*"
+        
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="✏️ Добавить заметку", callback_data=f"add_note_{pose_id}"),
+                    InlineKeyboardButton(text="🗑️ Удалить заметки", callback_data=f"delete_notes_{pose_id}")
+                ],
+                [
+                    InlineKeyboardButton(text="🔙 К позе", callback_data=f"pose_{pose_id}")
+                ]
+            ]
+        )
+        
+        await callback.message.edit_text(
+            notes_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    else:
+        # Нет заметок, предлагаем добавить
+        notes_text = "📝 *Заметки к позе*\n\nУ вас пока нет заметок к этой позе.\n\n💡 *Заметки помогут вам:*\n• Запомнить важные детали\n• Отметить свои ощущения\n• Планировать практику"
+        
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="✏️ Добавить заметку", callback_data=f"add_note_{pose_id}")
+                ],
+                [
+                    InlineKeyboardButton(text="🔙 К позе", callback_data=f"pose_{pose_id}")
+                ]
+            ]
+        )
+        
+        await callback.message.edit_text(
+            notes_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+
+@dp.callback_query(F.data.startswith("add_note_"))
+async def add_note_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Обработчик добавления заметки"""
+    pose_id = int(callback.data.split("_", 2)[2])
+    
+    # Получаем информацию о позе
+    pose = await db.get_yoga_pose_by_id(pose_id)
+    if not pose:
+        await callback.answer("❌ Поза не найдена!")
+        return
+    
+    # Сохраняем pose_id в состоянии
+    await state.update_data(pose_id=pose_id)
+    await state.set_state(UserStates.waiting_for_notes)
+    
+    await callback.message.edit_text(
+        f"📝 *Добавление заметки*\n\n"
+        f"🧘‍♀️ *{pose['name']}*\n\n"
+        f"💡 *Напишите вашу заметку:*\n"
+        f"(Максимум 500 символов)\n\n"
+        f"Пример: \"Отлично растягивает спину, делаю утром\"",
+        parse_mode="Markdown"
+    )
+
+@dp.callback_query(F.data.startswith("delete_notes_"))
+async def delete_notes_callback(callback: types.CallbackQuery):
+    """Обработчик удаления заметок"""
+    pose_id = int(callback.data.split("_", 2)[2])
+    user_id = callback.from_user.id
+    
+    # Удаляем все заметки к этой позе
+    success = await db_enhanced.delete_user_notes(user_id, pose_id)
+    
+    if success:
+        await callback.answer("🗑️ Заметки удалены!")
+    else:
+        await callback.answer("❌ Ошибка при удалении заметок")
+    
+    # Возвращаемся к позе
+    pose = await db.get_yoga_pose_by_id(pose_id)
+    if pose:
+        await show_pose_info_callback(callback, pose)
+
 @dp.callback_query(F.data == "back_to_settings")
 async def back_to_settings_callback(callback: types.CallbackQuery):
     """Обработчик возврата к настройкам"""
@@ -680,6 +862,17 @@ async def random_pose_callback(callback: types.CallbackQuery):
         await show_pose_info_callback(callback, pose)
     else:
         await callback.answer("❌ Не удалось найти подходящую позу.")
+
+@dp.callback_query(F.data.startswith("pose_"))
+async def pose_callback(callback: types.CallbackQuery):
+    """Обработчик показа информации о позе"""
+    pose_id = int(callback.data.split("_", 1)[1])
+    pose = await db.get_yoga_pose_by_id(pose_id)
+    
+    if pose:
+        await show_pose_info_callback(callback, pose)
+    else:
+        await callback.answer("❌ Поза не найдена!")
 
 @dp.callback_query(F.data.startswith("rate_"))
 async def rate_pose_callback(callback: types.CallbackQuery):
@@ -833,14 +1026,69 @@ async def show_pose_info_callback(callback: types.CallbackQuery, pose: Dict):
         parse_mode="Markdown"
     )
 
+# Обработчик ввода заметки
+@dp.message(StateFilter(UserStates.waiting_for_notes))
+async def process_note_text(message: types.Message, state: FSMContext):
+    """Обработчик ввода текста заметки"""
+    note_text = message.text.strip()
+    
+    # Проверяем длину заметки
+    if len(note_text) > 500:
+        await message.answer(
+            "❌ Заметка слишком длинная! Максимум 500 символов.\n"
+            f"Ваша заметка: {len(note_text)} символов\n\n"
+            "💡 Попробуйте сократить текст.",
+            reply_markup=get_main_keyboard()
+        )
+        return
+    
+    # Получаем pose_id из состояния
+    data = await state.get_data()
+    pose_id = data.get('pose_id')
+    
+    if not pose_id:
+        await message.answer("❌ Ошибка: не найден ID позы. Попробуйте снова.")
+        await state.clear()
+        return
+    
+    # Сохраняем заметку в базу данных
+    success = await db_enhanced.add_user_note(
+        user_id=message.from_user.id,
+        pose_id=pose_id,
+        note_text=note_text
+    )
+    
+    if success:
+        await message.answer(
+            f"✅ *Заметка сохранена!*\n\n"
+            f"📝 *Ваша заметка:*\n{note_text}\n\n"
+            f"💡 Заметка привязана к позе и будет доступна при следующем просмотре.",
+            parse_mode="Markdown",
+            reply_markup=get_main_keyboard()
+        )
+    else:
+        await message.answer(
+            "❌ Ошибка при сохранении заметки. Попробуйте позже.",
+            reply_markup=get_main_keyboard()
+        )
+    
+    # Очищаем состояние
+    await state.clear()
+
 # Обработчик неизвестных сообщений
 @dp.message()
 async def unknown_message(message: types.Message):
     """Обработчик неизвестных сообщений"""
-    await message.answer(
-        "❓ Не понимаю эту команду. Используйте /help для получения справки.",
-        reply_markup=get_main_keyboard()
-    )
+    # Игнорируем обычный текст в группах
+    if message.chat.type in ['group', 'supergroup']:
+        return
+    
+    # Отвечаем только в личных сообщениях
+    if message.chat.type == 'private':
+        await message.answer(
+            "❓ Не понимаю эту команду. Используйте /help для получения справки.",
+            reply_markup=get_main_keyboard()
+        )
 
 async def main():
     """Основная функция запуска бота"""
