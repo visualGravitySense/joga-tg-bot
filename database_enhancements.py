@@ -162,6 +162,20 @@ class DatabaseEnhancements:
                 columns = [description[0] for description in cursor.description]
                 return [dict(zip(columns, row)) for row in rows]
     
+    async def delete_user_notes(self, user_id: int, pose_id: int) -> bool:
+        """Удаление заметок пользователя к конкретной позе"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute("""
+                    DELETE FROM user_notes 
+                    WHERE user_id = ? AND pose_id = ?
+                """, (user_id, pose_id))
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Ошибка удаления заметок: {e}")
+            return False
+    
     async def unlock_achievement(self, user_id: int, achievement_type: str, 
                                 achievement_name: str, description: str) -> bool:
         """Разблокировка достижения"""
